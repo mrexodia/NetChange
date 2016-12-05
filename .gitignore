@@ -1,0 +1,5 @@
+*.userprefs
+*.sdf
+bin/
+obj/
+*.user
