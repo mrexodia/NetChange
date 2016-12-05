@@ -19,14 +19,16 @@ namespace NetChange
         {
             TcpClient client = new TcpClient("localhost", port);
             Read = new StreamReader(client.GetStream());
-            Write = new StreamWriter(client.GetStream());
-            Write.AutoFlush = true;
+            Write = new StreamWriter(client.GetStream())
+            {
+                AutoFlush = true
+            };
 
             // De server kan niet zien van welke poort wij client zijn, dit moeten we apart laten weten
-            Write.WriteLine("Poort: " + Program.MijnPoort);
+            Write.WriteLine(Program.MijnPoort);
 
             // Start het reader-loopje
-            new Thread(ReaderThread).Start();
+            new Thread(ReaderLoop).Start();
         }
 
         // Deze constructor wordt gebruikt als wij SERVER zijn en een CLIENT maakt met ons verbinding
@@ -36,13 +38,24 @@ namespace NetChange
             Write = write;
 
             // Start het reader-loopje
-            new Thread(ReaderThread).Start();
+            new Thread(ReaderLoop).Start();
         }
 
-        // LET OP: Nadat er verbinding is gelegd, kun je vergeten wie er client/server is (en dat kun je aan het Connection-object dus ook niet zien!)
+        public static Connection SafeConnect(int port)
+        {
+            while (true)
+            {
+                try
+                {
+                    return new Connection(port);
+                }
+                catch { } // Kon niet verbinden
+                Thread.Sleep(100);
+            }
+        }
 
         // Deze loop leest wat er binnenkomt en print dit
-        public void ReaderThread()
+        private void ReaderLoop()
         {
             try
             {
@@ -65,7 +78,7 @@ namespace NetChange
             new Thread(() => AcceptLoop(server)).Start();
         }
 
-        private void AcceptLoop(TcpListener handle)
+        private static void AcceptLoop(TcpListener handle)
         {
             while (true)
             {
@@ -77,13 +90,14 @@ namespace NetChange
                 };
 
                 // De server weet niet wat de poort is van de client die verbinding maakt, de client geeft dus als onderdeel van het protocol als eerst een bericht met zijn poort
-                int port = int.Parse(clientIn.ReadLine().Split()[1]);
+                int port = int.Parse(clientIn.ReadLine());
 
                 Console.WriteLine("// Client maakt verbinding: " + port);
 
                 // Zet de nieuwe verbinding in de verbindingslijst
+                var connection = new Connection(clientIn, clientOut);
                 lock (Program.Neighbors)
-                    Program.Neighbors.Add(port, new Connection(clientIn, clientOut));
+                    Program.Neighbors.Add(port, connection);
             }
         }
     }
@@ -93,57 +107,46 @@ namespace NetChange
         public static int MijnPoort;
         public static Dictionary<int, Connection> Neighbors = new Dictionary<int, Connection>();
 
-        static void RoutingTable()
+        private static void RoutingTable()
         {
             Console.WriteLine("// RoutingTable()");
         }
 
-        static void SendMessage(int port, string message)
+        private static void SendMessage(int port, string message)
         {
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
             lock (Neighbors)
                 Neighbors[port].Write.WriteLine(message);
         }
 
-        static void Connect(int port)
+        private static void Connect(int port)
         {
             Console.WriteLine("// Connect({0})", port);
-            while (true)
-            {
-                try
-                {
-                    new Connection(port);
-                    break;
-                }
-                catch { } // Kon niet verbinden
-                Thread.Sleep(100);
-            }
+            var connection = Connection.SafeConnect(port);
+            lock (Neighbors)
+                Neighbors[port] = connection;
         }
 
-        static void Disconnect(int port)
+        private static void Disconnect(int port)
         {
             Console.WriteLine("// Disonnect({0})", port);
         }
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
-            if (args.Length == 0)
-            {
-                Console.WriteLine("FUCK YOU");
-                return;
-            }
-
+            // Create server
             MijnPoort = int.Parse(args[0]);
             Console.Title = "Server: " + MijnPoort.ToString();
             new Server(MijnPoort);
 
-            // Connect met de buren
+            // Connect to the neighbors
             for (var i = 0; i < args.Length - 1; i++)
             {
                 var port = int.Parse(args[i + 1]);
-                new Thread(() => Connect(port)).Start();
+                new Thread(() => Connection.SafeConnect(port)).Start();
             }
 
+            // Read user input
             while (true)
             {
                 string input = Console.ReadLine();
@@ -165,6 +168,12 @@ namespace NetChange
                     default:
                         Console.WriteLine("// Command ongeldig!");
                         break;
+#if DEBUG
+                    case "N":
+                        foreach (var port in Neighbors.Keys)
+                            Console.WriteLine("// {0}", port);
+                        break;
+#endif
                 }
             }
         }
