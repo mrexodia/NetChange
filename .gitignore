@@ -1,5 +1,6 @@
 *.userprefs
 *.sdf
+*.suo
 bin/
 obj/
 *.user
