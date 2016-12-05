@@ -18,6 +18,7 @@ namespace NetChange
         static void SendMessage(int port, string message)
         {
             Console.WriteLine("SendMessage({0}, \"{1}\")", port, message);
+            Neighbors[port].Write.WriteLine(message);
         }
 
         static void Connect(int port)

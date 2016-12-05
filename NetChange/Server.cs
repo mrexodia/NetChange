@@ -21,6 +21,18 @@ namespace NetChange
             new Thread(() => AcceptLoop(server)).Start();
         }
 
+        private void readShit(int port)
+        {
+            new Thread(() =>
+                {
+                    while (true)
+                    {
+                        var line = Program.Neighbors[port].Read.ReadLine();
+                        Console.WriteLine("Zieke lezen: \"{0}\"", line);
+                    }
+                }).Start();
+        }
+
         private void AcceptLoop(TcpListener handle)
         {
             while (true)
