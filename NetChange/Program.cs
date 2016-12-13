@@ -15,18 +15,19 @@ namespace NetChange
         {
             if (u == v)
             {
-                Program.Distance[u] = 0;
-                Program.PreferredNeighbor[v] = u;
+                Program.Du[u] = 0;
+                Program.Nbu[v] = u;
             }
             else
             {
                 var w = minimumNeighbor(v);
-                Program.PreferredNeighbor[v] = w;
+                Program.Nbu[v] = w;
 
                 var tuple = new Tuple<Connection, Connection>(w, v);
-                Program.Distance[v] = Program.NeighborDistance[tuple] + 1;
+                Program.Du[v] = Program.Ndisu[tuple] + 1;
             }
         }
+
         private Connection minimumNeighbor(Connection v)
         {
             int minimum = int.MaxValue;
@@ -35,7 +36,7 @@ namespace NetChange
             foreach (var w in Program.Neighbors.Values)
             {
                 var tuple = new Tuple<Connection, Connection>(w, v);
-                int temp = Program.NeighborDistance[tuple];
+                int temp = Program.Ndisu[tuple];
 
                 if (temp < minimum)
                 {
@@ -144,9 +145,9 @@ namespace NetChange
     {
         public static int MijnPoort;
         public static Dictionary<int, Connection> Neighbors = new Dictionary<int, Connection>();
-        public static Dictionary<Connection, int> Distance = new Dictionary<Connection, int>();
-        public static Dictionary<Connection, Connection> PreferredNeighbor = new Dictionary<Connection, Connection>();
-        public static Dictionary<Tuple<Connection, Connection>, int> NeighborDistance = new Dictionary<Tuple<Connection, Connection>, int>();
+        public static Dictionary<Connection, int> Du = new Dictionary<Connection, int>();
+        public static Dictionary<Connection, Connection> Nbu = new Dictionary<Connection, Connection>();
+        public static Dictionary<Tuple<Connection, Connection>, int> Ndisu = new Dictionary<Tuple<Connection, Connection>, int>();
 
         private static void RoutingTable()
         {
