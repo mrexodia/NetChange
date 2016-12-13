@@ -150,7 +150,9 @@ namespace NetChange
                 // Zet de nieuwe verbinding in de verbindingslijst
                 var connection = new Connection(clientIn, clientOut);
                 lock (Program.Neighu)
+                {
                     Program.Neighu.Add(port, connection);
+                }
             }
         }
     }
@@ -179,7 +181,8 @@ namespace NetChange
             Nbu[u] = u; // local
             foreach (var w in Neighu)
             {
-                // TO DO send message to w with {mydist, u, 0}
+                var message = string.Format("update mydist {0} 0", u);
+                SendMessage(w.Key, message);
             }
         }
 
@@ -214,13 +217,15 @@ namespace NetChange
             MijnPoort = int.Parse(args[0]);
             Console.Title = "Server: " + MijnPoort.ToString();
             new Server(MijnPoort);
-
+            
             // Connect to the neighbors
             for (var i = 0; i < args.Length - 1; i++)
             {
                 var port = int.Parse(args[i + 1]);
-                new Thread(() => Connection.SafeConnect(port)).Start();
+                Connection.SafeConnect(port);
             }
+
+            Initialize();
 
             // Read user input
             while (true)
