@@ -11,7 +11,7 @@ namespace NetChange
 {
     class RoutingTable
     {
-        public void Recompute(Connection u, Connection v)
+        public void Recompute(int u, int v)
         {
             if (u == v)
             {
@@ -23,19 +23,19 @@ namespace NetChange
                 var w = minimumNeighbor(v);
                 Program.Nbu[v] = w;
 
-                var tuple = new Tuple<Connection, Connection>(w, v);
+                var tuple = new Tuple<int, int>(w, v);
                 Program.Du[v] = Program.Ndisu[tuple] + 1;
             }
         }
 
-        private Connection minimumNeighbor(Connection v)
+        private int minimumNeighbor(int v)
         {
             int minimum = int.MaxValue;
-            Connection prefNeighbor = null;
+            int prefNeighbor = 0;
 
-            foreach (var w in Program.Neighbors.Values)
+            foreach (var w in Program.Neighbors.Keys)
             {
-                var tuple = new Tuple<Connection, Connection>(w, v);
+                var tuple = new Tuple<int, int>(w, v);
                 int temp = Program.Ndisu[tuple];
 
                 if (temp < minimum)
@@ -145,9 +145,9 @@ namespace NetChange
     {
         public static int MijnPoort;
         public static Dictionary<int, Connection> Neighbors = new Dictionary<int, Connection>();
-        public static Dictionary<Connection, int> Du = new Dictionary<Connection, int>();
-        public static Dictionary<Connection, Connection> Nbu = new Dictionary<Connection, Connection>();
-        public static Dictionary<Tuple<Connection, Connection>, int> Ndisu = new Dictionary<Tuple<Connection, Connection>, int>();
+        public static Dictionary<int, int> Du = new Dictionary<int, int>();
+        public static Dictionary<int, int> Nbu = new Dictionary<int, int>();
+        public static Dictionary<Tuple<int, int>, int> Ndisu = new Dictionary<Tuple<int, int>, int>();
 
         private static void RoutingTable()
         {
