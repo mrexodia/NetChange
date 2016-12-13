@@ -11,8 +11,11 @@ namespace NetChange
 {
     class RoutingTable
     {
-        public void Recompute(int u, int v)
+        public void Recompute(int v)
         {
+            int u = Program.MijnPoort;
+            int prev = Program.Du[v];
+            int current = 0;
             if (u == v)
             {
                 Program.Du[u] = 0;
@@ -20,15 +23,29 @@ namespace NetChange
             }
             else
             {
-                var w = minimumNeighbor(v);
-                Program.Nbu[v] = w;
+                var minN = minimumNeighbor(v);
+                var N = Program.Neighbors.Count;
+                if (minN.Item2 < N)
+                {
+                    Program.Nbu[v] = minN.Item1;
 
-                var tuple = new Tuple<int, int>(w, v);
-                Program.Du[v] = Program.Ndisu[tuple] + 1;
+                    var tuple = new Tuple<int, int>(minN.Item1, v);
+                    Program.Du[v] = Program.Ndisu[tuple] + 1;
+                }
+                else
+                {
+                    Program.Du[v] = N;
+                    Program.Nbu[v] = -1;
+                }
+                current = Program.Du[v];
+            }
+            if (current != prev)
+            {
+                // TO DO send message to neighbors with new Du[v]
             }
         }
 
-        private int minimumNeighbor(int v)
+        private Tuple<int, int> minimumNeighbor(int v)
         {
             int minimum = int.MaxValue;
             int prefNeighbor = 0;
@@ -44,7 +61,7 @@ namespace NetChange
                     prefNeighbor = w;
                 }
             }
-            return prefNeighbor;
+            return new Tuple<int, int>(prefNeighbor, minimum);
         }
     }
 
