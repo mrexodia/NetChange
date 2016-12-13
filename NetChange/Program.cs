@@ -9,6 +9,44 @@ using System.Threading;
 
 namespace NetChange
 {
+    class RoutingTable
+    {
+        public void Recompute(Connection u, Connection v)
+        {
+            if (u == v)
+            {
+                Program.Distance[u] = 0;
+                Program.PreferredNeighbor[v] = u;
+            }
+            else
+            {
+                var w = minimumNeighbor(v);
+                Program.PreferredNeighbor[v] = w;
+
+                var tuple = new Tuple<Connection, Connection>(w, v);
+                Program.Distance[v] = Program.NeighborDistance[tuple] + 1;
+            }
+        }
+        private Connection minimumNeighbor(Connection v)
+        {
+            int minimum = int.MaxValue;
+            Connection prefNeighbor = null;
+
+            foreach (var w in Program.Neighbors.Values)
+            {
+                var tuple = new Tuple<Connection, Connection>(w, v);
+                int temp = Program.NeighborDistance[tuple];
+
+                if (temp < minimum)
+                {
+                    minimum = temp;
+                    prefNeighbor = w;
+                }
+            }
+            return prefNeighbor;
+        }
+    }
+
     class Connection
     {
         public StreamReader Read;
@@ -106,6 +144,9 @@ namespace NetChange
     {
         public static int MijnPoort;
         public static Dictionary<int, Connection> Neighbors = new Dictionary<int, Connection>();
+        public static Dictionary<Connection, int> Distance = new Dictionary<Connection, int>();
+        public static Dictionary<Connection, Connection> PreferredNeighbor = new Dictionary<Connection, Connection>();
+        public static Dictionary<Tuple<Connection, Connection>, int> NeighborDistance = new Dictionary<Tuple<Connection, Connection>, int>();
 
         private static void RoutingTable()
         {
