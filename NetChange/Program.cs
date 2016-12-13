@@ -15,7 +15,6 @@ namespace NetChange
         {
             int u = Program.MijnPoort;
             int prev = Program.Du[v];
-            int current = 0;
             if (u == v)
             {
                 Program.Du[u] = 0;
@@ -24,22 +23,21 @@ namespace NetChange
             else
             {
                 var minN = minimumNeighbor(v);
-                var N = Program.Neighbors.Count;
-                if (minN.Item2 < N)
-                {
-                    Program.Nbu[v] = minN.Item1;
+                var w = minN.Item1;
+                var d = minN.Item2 + 1;
 
-                    var tuple = new Tuple<int, int>(minN.Item1, v);
-                    Program.Du[v] = Program.Ndisu[tuple] + 1;
+                if (d < 20)
+                {
+                    Program.Du[v] = d;
+                    Program.Nbu[v] = w;
                 }
                 else
                 {
-                    Program.Du[v] = N;
+                    Program.Du[v] = 20;
                     Program.Nbu[v] = -1;
                 }
-                current = Program.Du[v];
             }
-            if (current != prev)
+            if (Program.Du[v] != prev)
             {
                 // TO DO send message to neighbors with new Du[v]
             }
