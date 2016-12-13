@@ -150,9 +150,7 @@ namespace NetChange
                 // Zet de nieuwe verbinding in de verbindingslijst
                 var connection = new Connection(clientIn, clientOut);
                 lock (Program.Neighu)
-                {
                     Program.Neighu.Add(port, connection);
-                }
             }
         }
     }
@@ -222,8 +220,21 @@ namespace NetChange
             for (var i = 0; i < args.Length - 1; i++)
             {
                 var port = int.Parse(args[i + 1]);
-                Connection.SafeConnect(port);
+                new Thread(() => Connection.SafeConnect(port)).Start();
             }
+
+            Console.WriteLine("// Iedereen gaat je moeder nemen");
+
+            //TODO: beter geen busywait
+            while (true)
+            {
+                lock (Neighu)
+                    if (Neighu.Count == args.Length - 1)
+                        break;
+                Thread.Sleep(10);
+            }
+
+            Console.WriteLine("// Iedereen heeft je moeder genomen");
 
             Initialize();
 
