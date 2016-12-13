@@ -18,7 +18,7 @@ namespace NetChange
             if (u == v)
             {
                 Program.Du[u] = 0;
-                Program.Nbu[v] = u;
+                Program.Nbu[v] = u; // local
             }
             else
             {
@@ -34,7 +34,7 @@ namespace NetChange
                 else
                 {
                     Program.Du[v] = 20;
-                    Program.Nbu[v] = -1;
+                    Program.Nbu[v] = -1; //undefined
                 }
             }
             if (Program.Du[v] != prev)
@@ -46,12 +46,11 @@ namespace NetChange
         private Tuple<int, int> minimumNeighbor(int v)
         {
             int minimum = int.MaxValue;
-            int prefNeighbor = 0;
+            int prefNeighbor = -1;
 
-            foreach (var w in Program.Neighbors.Keys)
+            foreach (var w in Program.Neighu.Keys)
             {
-                var tuple = new Tuple<int, int>(w, v);
-                int temp = Program.Ndisu[tuple];
+                int temp = Program.Ndisu[new Tuple<int, int>(w, v)];
 
                 if (temp < minimum)
                 {
@@ -150,8 +149,8 @@ namespace NetChange
 
                 // Zet de nieuwe verbinding in de verbindingslijst
                 var connection = new Connection(clientIn, clientOut);
-                lock (Program.Neighbors)
-                    Program.Neighbors.Add(port, connection);
+                lock (Program.Neighu)
+                    Program.Neighu.Add(port, connection);
             }
         }
     }
@@ -159,10 +158,30 @@ namespace NetChange
     class Program
     {
         public static int MijnPoort;
-        public static Dictionary<int, Connection> Neighbors = new Dictionary<int, Connection>();
+        public static Dictionary<int, Connection> Neighu = new Dictionary<int, Connection>();
         public static Dictionary<int, int> Du = new Dictionary<int, int>();
         public static Dictionary<int, int> Nbu = new Dictionary<int, int>();
         public static Dictionary<Tuple<int, int>, int> Ndisu = new Dictionary<Tuple<int, int>, int>();
+
+        private static void Initialize()
+        {
+            var u = Program.MijnPoort;
+            foreach (var w in Neighu)
+            {
+                Ndisu[new Tuple<int, int>(w.Key, u)] = 20;
+            }
+            foreach (var v in Neighu)
+            {
+                Du[v.Key] = 20;
+                Nbu[v.Key] = -1; // undefined
+            }
+            Du[u] = 0;
+            Nbu[u] = u; // local
+            foreach (var w in Neighu)
+            {
+                // TO DO send message to w with {mydist, u, 0}
+            }
+        }
 
         private static void RoutingTable()
         {
@@ -172,16 +191,16 @@ namespace NetChange
         private static void SendMessage(int port, string message)
         {
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
-            lock (Neighbors)
-                Neighbors[port].Write.WriteLine(message);
+            lock (Neighu)
+                Neighu[port].Write.WriteLine(message);
         }
 
         private static void Connect(int port)
         {
             Console.WriteLine("// Connect({0})", port);
             var connection = Connection.SafeConnect(port);
-            lock (Neighbors)
-                Neighbors[port] = connection;
+            lock (Neighu)
+                Neighu[port] = connection;
         }
 
         private static void Disconnect(int port)
@@ -227,7 +246,7 @@ namespace NetChange
                         break;
 #if DEBUG
                     case "N":
-                        foreach (var port in Neighbors.Keys)
+                        foreach (var port in Neighu.Keys)
                             Console.WriteLine("// {0}", port);
                         break;
 #endif
