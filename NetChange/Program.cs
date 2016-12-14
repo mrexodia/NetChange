@@ -11,10 +11,29 @@ namespace NetChange
 {
     public static class RoutingTable
     {
+        private static Tuple<int, int> minimumNeighbor(int v)
+        {
+            int minimum = int.MaxValue;
+            int prefNeighbor = -1;
+
+            foreach (var w in Program.Neigbors.Keys)
+            {
+                int temp = Program.Ndisu[w, v];
+                if (temp < minimum)
+                {
+                    minimum = temp;
+                    prefNeighbor = w;
+                }
+            }
+            return new Tuple<int, int>(prefNeighbor, minimum);
+        }
+
         public static void Recompute(int v)
         {
+            Console.WriteLine("// Recompute " + v);
             int u = Program.MijnPoort;
             int prev = Program.Du[v];
+            Console.WriteLine("// Previous = " + prev);
             if (u == v)
             {
                 Program.Du[u] = 0;
@@ -39,6 +58,7 @@ namespace NetChange
             }
             if (Program.Du[v] != prev)
             {
+                Console.WriteLine("// CHANGE {0}", v);
                 foreach (var x in Program.Neigbors.Keys)
                 {
                     Program.SendMessage(x, string.Format("mydist {0} {1} {2}", u, v, Program.Du[v]));
@@ -46,30 +66,52 @@ namespace NetChange
             }
             else
             {
-                //Console.WriteLine("//{0} NO CHANGE", v);
+                Console.WriteLine("// NO CHANGE {0}", v);
             }
-        }
-
-        private static Tuple<int, int> minimumNeighbor(int v)
-        {
-            int minimum = int.MaxValue;
-            int prefNeighbor = -1;
-
-            foreach (var w in Program.Neigbors.Keys)
-            {
-                int temp = Program.Ndisu[w, v];
-                if (temp < minimum)
-                {
-                    minimum = temp;
-                    prefNeighbor = w;
-                }
-            }
-            return new Tuple<int, int>(prefNeighbor, minimum);
         }
     }
 
     class Connection
     {
+        // Deze loop leest wat er binnenkomt en print dit
+        private void ReaderLoop()
+        {
+            try
+            {
+                while (true)
+                {
+                    var msg = Read.ReadLine();
+                    Console.WriteLine("// " + msg);
+                    var split = msg.Split(' ');
+                    if (split[0] == "mydist")
+                    {
+                        var w = int.Parse(split[1]);
+                        var v = int.Parse(split[2]);
+                        var d = int.Parse(split[3]);
+
+                        lock (Program.GlobalLock)
+                        {
+                            Program.Ndisu[w, v] = d;
+                            if (!Program.Du.ContainsKey(v))
+                            {
+                                foreach (var _w in Program.Neigbors)
+                                {
+                                    foreach (var _v in Program.Neigbors)
+                                    {
+                                        Program.Ndisu[_w.Key, _v.Key] = 20;
+
+                                    }
+                                    Program.Du[_w.Key] = 20;
+                                    Program.Nbu[_w.Key] = -1; // undefined
+                                }
+                            }
+                            RoutingTable.Recompute(v);
+                        }
+                    }
+                }
+            }
+            catch { } // Verbinding is kennelijk verbroken
+        }
         public StreamReader Read;
         public StreamWriter Write;
 
@@ -112,32 +154,6 @@ namespace NetChange
                 Thread.Sleep(100);
             }
         }
-
-        // Deze loop leest wat er binnenkomt en print dit
-        private void ReaderLoop()
-        {
-            try
-            {
-                while (true)
-                {
-                    var msg = Read.ReadLine();
-                    var split = msg.Split(' ');
-                    if (split[0] == "mydist")
-                    {
-                        var w = int.Parse(split[1]);
-                        var v = int.Parse(split[2]);
-                        var d = int.Parse(split[3]);
-
-                        lock (Program.GlobalLock)
-                        {
-                            Program.Ndisu[v, w] = d;
-                            RoutingTable.Recompute(v);
-                        }
-                    }
-                }
-            }
-            catch { } // Verbinding is kennelijk verbroken
-        }
     }
 
     class Server
@@ -170,7 +186,7 @@ namespace NetChange
 
                 // Zet de nieuwe verbinding in de verbindingslijst
                 var connection = new Connection(clientIn, clientOut);
-                lock (Program.Neigbors)
+                lock (Program.GlobalLock)
                     Program.Neigbors.Add(port, connection);
             }
         }
@@ -231,7 +247,7 @@ namespace NetChange
         public static void SendMessage(int port, string message)
         {
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
-            lock (Neigbors)
+            lock (GlobalLock)
                 Neigbors[port].Write.WriteLine(message);
         }
 
@@ -239,7 +255,7 @@ namespace NetChange
         {
             Console.WriteLine("// Connect({0})", port);
             var connection = Connection.SafeConnect(port);
-            lock (Neigbors)
+            lock (GlobalLock)
                 Neigbors[port] = connection;
         }
 
@@ -265,7 +281,7 @@ namespace NetChange
             //TODO: beter geen busywait
             while (true)
             {
-                lock (Neigbors)
+                lock (GlobalLock)
                     if (Neigbors.Count == args.Length - 1)
                         break;
                 Thread.Sleep(10);
@@ -273,7 +289,7 @@ namespace NetChange
 
             lock (GlobalLock)
             {
-                Thread.Sleep(5000);
+                Thread.Sleep(2000);
                 Initialize();
                 Console.WriteLine("Done initializing process {0}", MijnPoort);
             }
