@@ -13,45 +13,40 @@ namespace NetChange
     {
         public static void Recompute(int v)
         {
-            Console.WriteLine("// Recompute({0})", v);
             int u = Program.MijnPoort;
             int prev = Program.Du[v];
             if (u == v)
             {
-                Console.WriteLine("//{0} u == v FUCKU", v);
                 Program.Du[u] = 0;
                 Program.Nbu[v] = u; // local
             }
             else
             {
-                Console.WriteLine("NEIN");
                 var minN = minimumNeighbor(v);
                 var w = minN.Item1;
                 var d = minN.Item2 + 1;
-                Console.WriteLine("//{0} minN: {1},{2}", v, minN.Item1, minN.Item2);
 
                 if (d < 20)
                 {
-                    Console.WriteLine("//{0} d<20", v);
                     Program.Du[v] = d;
                     Program.Nbu[v] = w;
                 }
                 else
                 {
-                    Console.WriteLine("//{0} else", v);
                     Program.Du[v] = 20;
                     Program.Nbu[v] = -1; //undefined
                 }
             }
             if (Program.Du[v] != prev)
             {
-                Console.WriteLine("//{0} YES CHANGE", v);
-                foreach (var x in Program.Neighu.Keys)
+                foreach (var x in Program.Neigbors.Keys)
+                {
                     Program.SendMessage(x, string.Format("mydist {0} {1} {2}", u, v, Program.Du[v]));
+                }
             }
             else
             {
-                Console.WriteLine("//{0} NO CHANGE", v);
+                //Console.WriteLine("//{0} NO CHANGE", v);
             }
         }
 
@@ -60,10 +55,9 @@ namespace NetChange
             int minimum = int.MaxValue;
             int prefNeighbor = -1;
 
-            foreach (var w in Program.Neighu.Keys)
+            foreach (var w in Program.Neigbors.Keys)
             {
                 int temp = Program.Ndisu[w, v];
-
                 if (temp < minimum)
                 {
                     minimum = temp;
@@ -127,15 +121,18 @@ namespace NetChange
                 while (true)
                 {
                     var msg = Read.ReadLine();
-                    Console.WriteLine("// Message: " + msg);
                     var split = msg.Split(' ');
                     if (split[0] == "mydist")
                     {
                         var w = int.Parse(split[1]);
                         var v = int.Parse(split[2]);
                         var d = int.Parse(split[3]);
-                        Program.Ndisu[v, w] = d;
-                        RoutingTable.Recompute(v);
+
+                        lock (Program.GlobalLock)
+                        {
+                            Program.Ndisu[v, w] = d;
+                            RoutingTable.Recompute(v);
+                        }
                     }
                 }
             }
@@ -173,8 +170,8 @@ namespace NetChange
 
                 // Zet de nieuwe verbinding in de verbindingslijst
                 var connection = new Connection(clientIn, clientOut);
-                lock (Program.Neighu)
-                    Program.Neighu.Add(port, connection);
+                lock (Program.Neigbors)
+                    Program.Neigbors.Add(port, connection);
             }
         }
     }
@@ -192,8 +189,10 @@ namespace NetChange
             }
         }
 
+
+        public static object GlobalLock = new object();
         public static int MijnPoort;
-        public static Dictionary<int, Connection> Neighu = new Dictionary<int, Connection>();
+        public static Dictionary<int, Connection> Neigbors = new Dictionary<int, Connection>();
         public static Dictionary<int, int> Du = new Dictionary<int, int>();
         public static Dictionary<int, int> Nbu = new Dictionary<int, int>();
         public static NDIS Ndisu = new NDIS();
@@ -201,18 +200,19 @@ namespace NetChange
         private static void Initialize()
         {
             var u = Program.MijnPoort;
-            foreach (var w in Neighu)
+            foreach (var w in Neigbors)
             {
-                Ndisu[w.Key, u] = 20;
-            }
-            foreach (var v in Neighu)
-            {
-                Du[v.Key] = 20;
-                Nbu[v.Key] = -1; // undefined
+                foreach (var v in Neigbors)
+                {
+                    Ndisu[w.Key, v.Key] = 20;
+
+                }
+                Du[w.Key] = 20;
+                Nbu[w.Key] = -1; // undefined
             }
             Du[u] = 0;
             Nbu[u] = u; // local
-            foreach (var w in Neighu)
+            foreach (var w in Neigbors)
             {
                 var message = string.Format("mydist {0} {0} 0", u);
                 SendMessage(w.Key, message);
@@ -221,22 +221,26 @@ namespace NetChange
 
         public static void RoutingTable()
         {
-            Console.WriteLine("// RoutingTable()");
+            Console.WriteLine("{0} 0 local", MijnPoort);
+            foreach (var v in Neigbors)
+            {
+                Console.WriteLine("{0} {1} {2}", v.Key, Du[v.Key], Nbu[v.Key]);
+            }
         }
 
         public static void SendMessage(int port, string message)
         {
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
-            lock (Neighu)
-                Neighu[port].Write.WriteLine(message);
+            lock (Neigbors)
+                Neigbors[port].Write.WriteLine(message);
         }
 
         public static void Connect(int port)
         {
             Console.WriteLine("// Connect({0})", port);
             var connection = Connection.SafeConnect(port);
-            lock (Neighu)
-                Neighu[port] = connection;
+            lock (Neigbors)
+                Neigbors[port] = connection;
         }
 
         public static void Disconnect(int port)
@@ -248,9 +252,9 @@ namespace NetChange
         {
             // Create server
             MijnPoort = int.Parse(args[0]);
-            Console.Title = "Server: " + MijnPoort.ToString();
+            Console.Title = "NetChange " + MijnPoort.ToString();
             new Server(MijnPoort);
-            
+
             // Connect to the neighbors
             for (var i = 0; i < args.Length - 1; i++)
             {
@@ -258,20 +262,21 @@ namespace NetChange
                 new Thread(() => Connection.SafeConnect(port)).Start();
             }
 
-            Console.WriteLine("// Iedereen gaat je moeder nemen");
-
             //TODO: beter geen busywait
             while (true)
             {
-                lock (Neighu)
-                    if (Neighu.Count == args.Length - 1)
+                lock (Neigbors)
+                    if (Neigbors.Count == args.Length - 1)
                         break;
                 Thread.Sleep(10);
             }
 
-            Console.WriteLine("// Iedereen heeft je moeder genomen");
-
-            Initialize();
+            lock (GlobalLock)
+            {
+                Thread.Sleep(5000);
+                Initialize();
+                Console.WriteLine("Done initializing process {0}", MijnPoort);
+            }
 
             // Read user input
             while (true)
@@ -297,7 +302,7 @@ namespace NetChange
                         break;
 #if DEBUG
                     case "N":
-                        foreach (var port in Neighu.Keys)
+                        foreach (var port in Neigbors.Keys)
                             Console.WriteLine("// {0}", port);
                         break;
 #endif
