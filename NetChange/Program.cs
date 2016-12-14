@@ -59,7 +59,7 @@ namespace NetChange
             }
             if (Program.Du[v] != prev)
             {
-                Console.WriteLine("// CHANGE {0}", v);
+                Console.WriteLine("// CHANGE {0} -> {1}", v, Program.Du[v]);
                 foreach (var x in Program.Neigbors.Keys)
                 {
                     Program.SendMessage(x, string.Format("mydist {0} {1} {2}", u, v, Program.Du[v]));
@@ -103,6 +103,12 @@ namespace NetChange
                         }
                     }
                 }
+                else if (split[0] == "forward")
+                {
+                    Program.ForwardMessage(int.Parse(split[1]), msg.Substring(msg.IndexOf(split[1]) + split[1].Length + 1));
+                }
+                else
+                    Console.WriteLine(msg);
             }
         }
         public StreamReader Read;
@@ -228,8 +234,12 @@ namespace NetChange
 
             public int[] Keys { get { return _neigbors.Keys.ToArray(); } }
             public int Count { get { return _neigbors.Count; } }
-        }
 
+            public bool ContainsKey(int port)
+            {
+                return _neigbors.ContainsKey(port);
+            }
+        }
 
         public static object GlobalLock = new object();
         public static object NeighborLock = new object();
@@ -257,7 +267,7 @@ namespace NetChange
             }
         }
 
-        public static void RoutingTable()
+        public static void PrintRoutingTable()
         {
             lock (GlobalLock)
                 foreach (var i in Nbu.Select(v => string.Format("{0} {1} {2}", v.Key, Du[v.Key], v.Value == MijnPoort ? "local" : v.Value.ToString())).OrderBy(s => int.Parse(s.Split(' ')[0])))
@@ -269,6 +279,25 @@ namespace NetChange
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
             lock (NeighborLock)
                 Neigbors[port].Write.WriteLine(message);
+        }
+
+        public static void ForwardMessage(int port, string message)
+        {
+            Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
+            lock (NeighborLock)
+            {
+                int dest;
+                if (Nbu.TryGetValue(port, out dest))
+                {
+                    Console.WriteLine("Bericht voor {0} doorgestuurd naar {1}", port, dest);
+                    if (!Neigbors.ContainsKey(port))
+                        Neigbors[dest].Write.WriteLine("forward {0} {1}", port, message);
+                    else
+                        Neigbors[dest].Write.WriteLine(message);
+                }
+                else
+                    Console.WriteLine("Poort {0} is niet bekend", port);
+            }
         }
 
         public static void Connect(int port)
@@ -327,10 +356,10 @@ namespace NetChange
                 switch (split[0])
                 {
                     case "R":
-                        RoutingTable();
+                        PrintRoutingTable();
                         break;
                     case "B":
-                        SendMessage(int.Parse(split[1]), input.Substring(input.IndexOf(split[1]) + split[1].Length + 1));
+                        ForwardMessage(int.Parse(split[1]), input.Substring(input.IndexOf(split[1]) + split[1].Length + 1));
                         break;
                     case "C":
                         Connect(int.Parse(split[1]));
