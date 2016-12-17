@@ -286,6 +286,11 @@ namespace NetChange
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
             lock (NeighborLock)
             {
+                if (port == MijnPoort)
+                {
+                    Console.WriteLine(message);
+                }
+
                 int dest;
                 if (Nbu.TryGetValue(port, out dest))
                 {
