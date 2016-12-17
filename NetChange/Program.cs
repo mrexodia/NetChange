@@ -98,17 +98,24 @@ namespace NetChange
                                 Program.Du[v] = Program.N;
                                 Program.Nbu[v] = -1;
                             }
-
                             RoutingTable.Recompute(v);
                         }
                     }
                 }
                 else if (split[0] == "forward")
                 {
-                    Program.ForwardMessage(int.Parse(split[1]), msg.Substring(msg.IndexOf(split[1]) + split[1].Length + 1));
+                    int port = int.Parse(split[1]);
+                    var message = msg.Substring(msg.IndexOf(split[1]) + split[1].Length + 1);
+
+                    if (port == Program.MijnPoort)
+                        Console.WriteLine(message);
+                    else
+                        Program.ForwardMessage(port, message);
                 }
                 else
+                {
                     Console.WriteLine(msg);
+                }
             }
         }
         public StreamReader Read;
@@ -286,11 +293,6 @@ namespace NetChange
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
             lock (NeighborLock)
             {
-                if (port == MijnPoort)
-                {
-                    Console.WriteLine(message);
-                }
-
                 int dest;
                 if (Nbu.TryGetValue(port, out dest))
                 {
@@ -310,7 +312,11 @@ namespace NetChange
             Console.WriteLine("// Connect({0})", port);
             var connection = Connection.SafeConnect(port);
             lock (NeighborLock)
+            {
                 Neigbors.Add(port, connection);
+                var message = string.Format("mydist {0} {0} 0", MijnPoort);
+                SendMessage(port, message);
+            }
         }
 
         public static void Disconnect(int port)
