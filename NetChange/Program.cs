@@ -84,33 +84,58 @@ namespace NetChange
                 var split = msg.Split(' ');
                 if (split[0] == "mydist")
                 {
-                    var w = int.Parse(split[1]);
-                    var v = int.Parse(split[2]);
+                    var sender = int.Parse(split[1]);
+                    var recipient = int.Parse(split[2]);
                     var d = int.Parse(split[3]);
 
                     lock (Program.GlobalLock)
                     {
-                        Program.Ndisu[w, v] = d;
+                        Program.Ndisu[sender, recipient] = d;
                         lock (Program.NeighborLock)
                         {
-                            if (!Program.Du.ContainsKey(v))
+                            if (!Program.Du.ContainsKey(recipient))
                             {
-                                Program.Du[v] = Program.N;
-                                Program.Nbu[v] = -1;
+                                Program.Du[recipient] = Program.N;
+                                Program.Nbu[recipient] = -1;
                             }
-                            RoutingTable.Recompute(v);
+                            RoutingTable.Recompute(recipient);
+                        }
+                    }
+                }
+                else if (split[0] == "update")
+                {
+                    var sender = int.Parse(split[1]);
+                    var recipient = int.Parse(split[2]);
+                    var d = int.Parse(split[3]);
+
+                    Program.Ndisu[sender, recipient] = d;
+                    {
+                        if (!Program.Du.ContainsKey(recipient))
+                        {
+                            Program.Du[recipient] = Program.N;
+                            Program.Nbu[recipient] = -1;
+                        }
+                        RoutingTable.Recompute(recipient);
+                        var subNetwork = Program.Neigbors.Keys.ToList();
+                        subNetwork.Add(Program.MijnPoort);
+
+                        foreach (var port in subNetwork)
+                        {
+                            Program.Ndisu[Program.MijnPoort, port] = Program.N;
+                            var message = string.Format("mydist {0} {1} {2}", Program.MijnPoort, port, Program.Du[port]);
+                            Program.SendMessage(sender, message);
                         }
                     }
                 }
                 else if (split[0] == "forward")
                 {
-                    int port = int.Parse(split[1]);
+                    int recipient = int.Parse(split[1]);
                     var message = msg.Substring(msg.IndexOf(split[1]) + split[1].Length + 1);
 
-                    if (port == Program.MijnPoort)
+                    if (recipient == Program.MijnPoort)
                         Console.WriteLine(message);
                     else
-                        Program.ForwardMessage(port, message);
+                        Program.ForwardMessage(recipient, message);
                 }
                 else
                 {
@@ -269,9 +294,14 @@ namespace NetChange
             Nbu[u] = u; // local
             foreach (var w in Neigbors.Keys)
             {
-                var message = string.Format("mydist {0} {0} 0", u);
+                var message = string.Format("mydist {0} {0} 0", MijnPoort);
                 SendMessage(w, message);
             }
+        }
+        private static void InitializePort(int port)
+        {
+            var message = string.Format("update {0} {0} 0", MijnPoort);
+            SendMessage(port, message);
         }
 
         public static void PrintRoutingTable()
@@ -314,8 +344,7 @@ namespace NetChange
             lock (NeighborLock)
             {
                 Neigbors.Add(port, connection);
-                var message = string.Format("mydist {0} {0} 0", MijnPoort);
-                SendMessage(port, message);
+                InitializePort(port);
             }
         }
 
@@ -356,7 +385,6 @@ namespace NetChange
 
                 lock (NeighborLock)
                     Initialize();
-                Console.WriteLine("// Done initializing process {0}", MijnPoort);
             }
 
             // Read user input
