@@ -17,7 +17,7 @@ namespace NetChange
             int minimum = int.MaxValue;
             int prefNeighbor = -1;
 
-            foreach (var w in Program.Neigbors.Keys)
+            foreach (var w in Program.Neighbors.Keys)
             {
                 int temp = Program.Ndisu[w, v];
                 if (temp < minimum)
@@ -60,7 +60,7 @@ namespace NetChange
             if (Program.Du[v] != prev)
             {
                 Console.WriteLine("// CHANGE {0} -> {1}", v, Program.Du[v]);
-                foreach (var x in Program.Neigbors.Keys)
+                foreach (var x in Program.Neighbors.Keys)
                 {
                     Program.SendMessage(x, string.Format("mydist {0} {1} {2}", u, v, Program.Du[v]));
                 }
@@ -82,7 +82,9 @@ namespace NetChange
                 var msg = Read.ReadLine();
                 Console.WriteLine("// " + msg);
                 var split = msg.Split(' ');
-                if (split[0] == "mydist")
+                var action = split[0];
+
+                if (action == "mydist" || action == "connect")
                 {
                     var sender = int.Parse(split[1]);
                     var recipient = int.Parse(split[2]);
@@ -99,35 +101,23 @@ namespace NetChange
                                 Program.Nbu[recipient] = -1;
                             }
                             RoutingTable.Recompute(recipient);
+
+                            if (action == "connect")
+                            {
+                                var subNetwork = Program.Neighbors.Keys.ToList();
+                                subNetwork.Add(Program.MijnPoort);
+
+                                foreach (var port in subNetwork)
+                                {
+                                    Program.Ndisu[Program.MijnPoort, port] = Program.N;
+                                    var message = string.Format("mydist {0} {1} {2}", Program.MijnPoort, port, Program.Du[port]);
+                                    Program.SendMessage(sender, message);
+                                }
+                            }
                         }
                     }
                 }
-                else if (split[0] == "update")
-                {
-                    var sender = int.Parse(split[1]);
-                    var recipient = int.Parse(split[2]);
-                    var d = int.Parse(split[3]);
-
-                    Program.Ndisu[sender, recipient] = d;
-                    {
-                        if (!Program.Du.ContainsKey(recipient))
-                        {
-                            Program.Du[recipient] = Program.N;
-                            Program.Nbu[recipient] = -1;
-                        }
-                        RoutingTable.Recompute(recipient);
-                        var subNetwork = Program.Neigbors.Keys.ToList();
-                        subNetwork.Add(Program.MijnPoort);
-
-                        foreach (var port in subNetwork)
-                        {
-                            Program.Ndisu[Program.MijnPoort, port] = Program.N;
-                            var message = string.Format("mydist {0} {1} {2}", Program.MijnPoort, port, Program.Du[port]);
-                            Program.SendMessage(sender, message);
-                        }
-                    }
-                }
-                else if (split[0] == "forward")
+                else if (action == "forward")
                 {
                     int recipient = int.Parse(split[1]);
                     var message = msg.Substring(msg.IndexOf(split[1]) + split[1].Length + 1);
@@ -219,7 +209,7 @@ namespace NetChange
                 // Zet de nieuwe verbinding in de verbindingslijst
                 var connection = new Connection(clientIn, clientOut);
                 lock (Program.NeighborLock)
-                    Program.Neigbors.Add(port, connection);
+                    Program.Neighbors.Add(port, connection);
             }
         }
     }
@@ -250,33 +240,33 @@ namespace NetChange
 
         public class NeighborHelper
         {
-            private static readonly Dictionary<int, Connection> _neigbors = new Dictionary<int, Connection>();
+            private static readonly Dictionary<int, Connection> _neighbors = new Dictionary<int, Connection>();
 
-            public Connection this[int u] { get { return _neigbors[u]; } }
+            public Connection this[int u] { get { return _neighbors[u]; } }
 
             public void Add(int port, Connection connection)
             {
-                if (_neigbors.ContainsKey(port))
+                if (ContainsKey(port))
                 {
                     Console.WriteLine("// Neighbors already contains {0}", port);
                     throw new InvalidOperationException();
                 }
-                _neigbors[port] = connection;
+                _neighbors[port] = connection;
             }
 
-            public int[] Keys { get { return _neigbors.Keys.ToArray(); } }
-            public int Count { get { return _neigbors.Count; } }
+            public int[] Keys { get { return _neighbors.Keys.ToArray(); } }
+            public int Count { get { return _neighbors.Count; } }
 
             public bool ContainsKey(int port)
             {
-                return _neigbors.ContainsKey(port);
+                return _neighbors.ContainsKey(port);
             }
         }
 
         public static object GlobalLock = new object();
         public static object NeighborLock = new object();
         public static int MijnPoort;
-        public static NeighborHelper Neigbors = new NeighborHelper();
+        public static NeighborHelper Neighbors = new NeighborHelper();
         public static Dictionary<int, int> Du = new Dictionary<int, int>();
         public static Dictionary<int, int> Nbu = new Dictionary<int, int>();
         public static NDIS Ndisu = new NDIS();
@@ -285,14 +275,14 @@ namespace NetChange
         private static void Initialize()
         {
             var u = MijnPoort;
-            foreach (var w in Neigbors.Keys)
+            foreach (var w in Neighbors.Keys)
             {
                 Du[w] = N;
                 Nbu[w] = -1; // undefined
             }
             Du[u] = 0;
             Nbu[u] = u; // local
-            foreach (var w in Neigbors.Keys)
+            foreach (var w in Neighbors.Keys)
             {
                 var message = string.Format("mydist {0} {0} 0", MijnPoort);
                 SendMessage(w, message);
@@ -300,7 +290,12 @@ namespace NetChange
         }
         private static void InitializePort(int port)
         {
-            var message = string.Format("update {0} {0} 0", MijnPoort);
+            var message = string.Format("connect {0} {0} 0", MijnPoort);
+            SendMessage(port, message);
+        }
+        private static void RemovePort(int port)
+        {
+            var message = string.Format("disconnect {0} {1} 0", MijnPoort, port);
             SendMessage(port, message);
         }
 
@@ -315,7 +310,7 @@ namespace NetChange
         {
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
             lock (NeighborLock)
-                Neigbors[port].Write.WriteLine(message);
+                Neighbors[port].Write.WriteLine(message);
         }
 
         public static void ForwardMessage(int port, string message)
@@ -327,10 +322,10 @@ namespace NetChange
                 if (Nbu.TryGetValue(port, out dest))
                 {
                     Console.WriteLine("Bericht voor {0} doorgestuurd naar {1}", port, dest);
-                    if (!Neigbors.ContainsKey(port))
-                        Neigbors[dest].Write.WriteLine("forward {0} {1}", port, message);
+                    if (!Neighbors.ContainsKey(port))
+                        Neighbors[dest].Write.WriteLine("forward {0} {1}", port, message);
                     else
-                        Neigbors[dest].Write.WriteLine(message);
+                        Neighbors[dest].Write.WriteLine(message);
                 }
                 else
                     Console.WriteLine("Poort {0} is niet bekend", port);
@@ -343,7 +338,7 @@ namespace NetChange
             var connection = Connection.SafeConnect(port);
             lock (NeighborLock)
             {
-                Neigbors.Add(port, connection);
+                Neighbors.Add(port, connection);
                 InitializePort(port);
             }
         }
@@ -369,7 +364,7 @@ namespace NetChange
                     if (port > MijnPoort)
                     {
                         lock (NeighborLock)
-                            Neigbors.Add(port, Connection.SafeConnect(port));
+                            Neighbors.Add(port, Connection.SafeConnect(port));
                     }
                 }
 
@@ -377,7 +372,7 @@ namespace NetChange
                 while (true)
                 {
                     lock (NeighborLock)
-                        if (Neigbors.Count == args.Length - 1)
+                        if (Neighbors.Count == args.Length - 1)
                             break;
                     Console.WriteLine("//Busywait");
                     Thread.Sleep(300);
