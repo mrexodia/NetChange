@@ -10,6 +10,16 @@ using System.Threading;
 
 namespace NetChange
 {
+    public static class Log
+    {
+        public static void WriteLine(string format, params object[] args)
+        {
+            if (format.StartsWith("//"))
+                return;
+            Console.WriteLine(format, args);
+        }
+    }
+
     public static class RoutingTable
     {
         private static Tuple<int, int> minimumNeighbor(int v)
@@ -31,10 +41,10 @@ namespace NetChange
 
         public static void Recompute(int v)
         {
-            Console.WriteLine("// Recompute " + v);
+            Log.WriteLine("// Recompute " + v);
             int u = Program.MijnPoort;
             int prev = Program.Du[v];
-            Console.WriteLine("// Previous = " + prev);
+            Log.WriteLine("// Previous = " + prev);
             if (u == v)
             {
                 Program.Du[u] = 0;
@@ -46,21 +56,23 @@ namespace NetChange
                 var w = minN.Item1;
                 var d = minN.Item2 + 1;
 
-                if (d < Program.N)
+                var subN = Program.Du.Where(gt => gt.Value != -1).Count();
+
+                if (d < subN)
                 {
                     Program.Du[v] = d;
                     Program.Nbu[v] = w;
                 }
                 else
                 {
-                    Program.Du[v] = Program.N;
+                    Program.Du[v] = subN;
                     Program.Nbu[v] = -1; //undefined
                 }
             }
             if (Program.Du[v] != prev)
             {
-                Console.WriteLine("// CHANGE {0} -> {1}", v, Program.Du[v]);
-                Console.WriteLine("Afstand naar {0} is nu {1} via {2}", v, Program.Du[v], Program.Nbu[v]);
+                Log.WriteLine("// CHANGE {0} -> {1}", v, Program.Du[v]);
+                Log.WriteLine("Afstand naar {0} is nu {1} via {2}", v, Program.Du[v], Program.Nbu[v]);
                 foreach (var x in Program.Neighbors.Keys)
                 {
                     Program.SendMessage(x, string.Format("mydist {0} {1} {2}", u, v, Program.Du[v]));
@@ -68,10 +80,10 @@ namespace NetChange
             }
             else
             {
-                Console.WriteLine("// NO CHANGE {0}", v);
+                Log.WriteLine("// NO CHANGE {0}", v);
 
                 if (Program.Du[v] == Program.N)
-                    Console.WriteLine("Onbereikbaar: {0}", v);
+                    Log.WriteLine("Onbereikbaar: {0}", v);
             }
         }
     }
@@ -97,7 +109,7 @@ namespace NetChange
                     //TODO: exception disconnect
                     return;
                 }
-                Console.WriteLine("// " + msg);
+                Log.WriteLine("// " + msg);
                 var split = msg.Split(' ');
                 var action = split[0];
 
@@ -127,24 +139,24 @@ namespace NetChange
                     var message = msg.Substring(msg.IndexOf(split[1]) + split[1].Length + 1);
 
                     if (recipient == Program.MijnPoort)
-                        Console.WriteLine(message);
+                        Log.WriteLine(message);
                     else
                         Program.ForwardMessage(recipient, message);
                 }
                 else if (action == "disconnect")
                 {
                     var port = int.Parse(split[1]);
-                    foreach (var nb in Program.Du.Keys.ToList())
-                        Program.SendMessage(port, "mydist {0} {1} {2}", Program.MijnPoort, nb, 20);
-
                     lock (Program.GlobalLock)
                     {
-                        Program.Neighbors.Remove(port);
+                        foreach (var nb in Program.Du)
+                        Program.SendMessage(port, "mydist {0} {1} {2}", Program.MijnPoort, nb.Key, 20);
+                        lock(Program.NeighborLock)
+                            Program.Neighbors.Remove(port);
                     }
                 }
                 else
                 {
-                    Console.WriteLine(msg);
+                    Log.WriteLine(msg);
                 }
             }
         }
@@ -188,7 +200,7 @@ namespace NetChange
                     return new Connection(port);
                 }
                 catch (SocketException) { } // Kon niet verbinden
-                Console.WriteLine("// SafeConnect({0}) failed, retrying...", port);
+                Log.WriteLine("// SafeConnect({0}) failed, retrying...", port);
                 Thread.Sleep(100);
             }
         }
@@ -220,7 +232,7 @@ namespace NetChange
                 // De server weet niet wat de poort is van de client die verbinding maakt, de client geeft dus als onderdeel van het protocol als eerst een bericht met zijn poort
                 int port = int.Parse(clientIn.ReadLine());
 
-                Console.WriteLine("// Client maakt verbinding: " + port);
+                Log.WriteLine("// Client maakt verbinding: " + port);
 
                 // Zet de nieuwe verbinding in de verbindingslijst
                 lock (Program.NeighborLock)
@@ -254,7 +266,7 @@ namespace NetChange
                     int val;
                     if (_ndisu.TryGetValue(key, out val))
                         return val;
-                    Console.WriteLine("// NDIS: unknown key ({0}, {1}) -> {2}", u, v, N);
+                    Log.WriteLine("// NDIS: unknown key ({0}, {1}) -> {2}", u, v, N);
                     return N;
                 }
                 set
@@ -274,7 +286,7 @@ namespace NetChange
             {
                 if (ContainsKey(port))
                 {
-                    Console.WriteLine("// Neighbors already contains {0}", port);
+                    Log.WriteLine("// Neighbors already contains {0}", port);
                     throw new InvalidOperationException();
                 }
                 _neighbors[port] = connection;
@@ -283,7 +295,7 @@ namespace NetChange
             {
                 if (!ContainsKey(port))
                 {
-                    Console.WriteLine("// Port {0} is not contained in neighbors", port);
+                    Log.WriteLine("// Port {0} is not contained in neighbors", port);
                     throw new InvalidOperationException();
                 }
                 _neighbors.Remove(port);
@@ -315,8 +327,8 @@ namespace NetChange
 
         private static void RemovePort(int port)
         {
-            foreach (var nb in Du.Keys.ToList())
-                SendMessage(port, "mydist {0} {1} {2}", MijnPoort, nb, 20);
+            foreach (var nb in Du)
+                SendMessage(port, "mydist {0} {1} {2}", MijnPoort, nb.Key, 20);
 
             SendMessage(port, "disconnect {0}", MijnPoort);
         }
@@ -325,63 +337,66 @@ namespace NetChange
         {
             lock (GlobalLock)
                 foreach (var i in Nbu.Where(x => x.Value != -1).Select(v => string.Format("{0} {1} {2}", v.Key, Du[v.Key], v.Value == MijnPoort ? "local" : v.Value.ToString())).OrderBy(s => int.Parse(s.Split(' ')[0])))
-                    Console.WriteLine(i);
+                    Log.WriteLine(i);
         }
 
         public static void SendMessage(int port, string message, params object[] args)
         {
             message = string.Format(message, args);
-            Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
+            Log.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
             lock (NeighborLock)
                 Neighbors[port].Write.WriteLine(message);
         }
 
         public static void ForwardMessage(int port, string message)
         {
-            Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
+            Log.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
             lock (NeighborLock)
             {
                 int dest;
                 if (Nbu.TryGetValue(port, out dest) && Nbu[port] != -1)
                 {
-                    Console.WriteLine("Bericht voor {0} doorgestuurd naar {1}", port, dest);
+                    Log.WriteLine("Bericht voor {0} doorgestuurd naar {1}", port, dest);
                     if (!Neighbors.ContainsKey(port))
                         Neighbors[dest].Write.WriteLine("forward {0} {1}", port, message);
                     else
                         Neighbors[dest].Write.WriteLine(message);
                 }
                 else
-                    Console.WriteLine("Poort {0} is niet bekend", port);
+                    Log.WriteLine("Poort {0} is niet bekend", port);
             }
         }
 
         public static void Connect(int port)
         {
-            Console.WriteLine("// Connect({0})", port);
+            Log.WriteLine("// Connect({0})", port);
             lock (NeighborLock)
             {
                 var connection = Connection.SafeConnect(port);
                 Neighbors.Add(port, connection);
                 InitializePort(port);
             }
-            Console.WriteLine("Verbonden: {0}", port);
+            Log.WriteLine("Verbonden: {0}", port);
         }
 
         public static void Disconnect(int port)
         {
-            Console.WriteLine("// Disconnect({0})", port);
+            Log.WriteLine("// Disconnect({0})", port);
 
-            if (Neighbors.ContainsKey(port))
+            lock (GlobalLock)
             {
-                lock (GlobalLock)
+                lock (NeighborLock)
                 {
-                    RemovePort(port);
+                    if (Neighbors.ContainsKey(port))
+                    {
+                        RemovePort(port);
+                        Neighbors.Remove(port);
+                        Log.WriteLine("Verbroken: {0}", port);
+                    }
+                    else
+                        Log.WriteLine("Poort {0} is niet bekend", port);
                 }
-                Neighbors.Remove(port);
-                Console.WriteLine("Verbroken: {0}", port);
             }
-            else
-                Console.WriteLine("Poort {0} is niet bekend", port);
         }
 
         private static void Main(string[] args)
@@ -427,7 +442,7 @@ namespace NetChange
                         Disconnect(int.Parse(split[1]));
                         break;
                     default:
-                        Console.WriteLine("// Command ongeldig!");
+                        Log.WriteLine("// Command ongeldig!");
                         break;
                 }
             }
