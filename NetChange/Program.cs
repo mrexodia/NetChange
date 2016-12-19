@@ -50,6 +50,7 @@ namespace NetChange
                 {
                     Program.Du[v] = d;
                     Program.Nbu[v] = w;
+                    Console.WriteLine("Onbereikbaar: {0}", v);
                 }
                 else
                 {
@@ -339,11 +340,17 @@ namespace NetChange
                 Neighbors.Add(port, connection);
                 InitializePort(port);
             }
+            Console.WriteLine("Verbonden: {0}", port);
         }
 
         public static void Disconnect(int port)
         {
-            Console.WriteLine("// Disonnect({0})", port);
+            Console.WriteLine("// Disconnect({0})", port);
+
+            if (Neighbors.ContainsKey(port))
+                Console.WriteLine("Verbroken: {0}", port);
+            else
+                Console.WriteLine("Poort {0} is niet bekend", port);
         }
 
         private static void Main(string[] args)
