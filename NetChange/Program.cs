@@ -136,6 +136,11 @@ namespace NetChange
                     var port = int.Parse(split[1]);
                     foreach (var nb in Program.Du.Keys.ToList())
                         Program.SendMessage(port, "mydist {0} {1} {2}", Program.MijnPoort, nb, 20);
+
+                    lock (Program.GlobalLock)
+                    {
+                        Program.Neighbors.Remove(port);
+                    }
                 }
                 else
                 {
@@ -274,6 +279,15 @@ namespace NetChange
                 }
                 _neighbors[port] = connection;
             }
+            public void Remove(int port)
+            {
+                if (!ContainsKey(port))
+                {
+                    Console.WriteLine("// Port {0} is not contained in neighbors", port);
+                    throw new InvalidOperationException();
+                }
+                _neighbors.Remove(port);
+            }
 
             public int[] Keys { get { return _neighbors.Keys.ToArray(); } }
             public int Count { get { return _neighbors.Count; } }
@@ -301,8 +315,8 @@ namespace NetChange
 
         private static void RemovePort(int port)
         {
-            foreach (var nb in Du)
-                SendMessage(port, "mydist {0} {1} {2}", MijnPoort, nb.Key, 20);
+            foreach (var nb in Du.Keys.ToList())
+                SendMessage(port, "mydist {0} {1} {2}", MijnPoort, nb, 20);
 
             SendMessage(port, "disconnect {0}", MijnPoort);
         }
@@ -363,6 +377,7 @@ namespace NetChange
                 {
                     RemovePort(port);
                 }
+                Neighbors.Remove(port);
                 Console.WriteLine("Verbroken: {0}", port);
             }
             else
