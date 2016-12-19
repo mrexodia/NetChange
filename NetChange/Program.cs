@@ -80,6 +80,7 @@ namespace NetChange
             lock (Program.NeighborLock)
             {
             }
+
             while (true)
             {
                 string msg;
@@ -207,9 +208,9 @@ namespace NetChange
                 Console.WriteLine("// Client maakt verbinding: " + port);
 
                 // Zet de nieuwe verbinding in de verbindingslijst
-                var connection = new Connection(clientIn, clientOut);
                 lock (Program.NeighborLock)
                 {
+                    var connection = new Connection(clientIn, clientOut);
                     Program.Neighbors.Add(port, connection);
                     foreach (var nb in Program.Du)
                         Program.SendMessage(port, "mydist {0} {1} {2}", Program.MijnPoort, nb.Key, nb.Value);
