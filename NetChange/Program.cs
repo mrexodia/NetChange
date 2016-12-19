@@ -77,14 +77,26 @@ namespace NetChange
         // Deze loop leest wat er binnenkomt en print dit
         private void ReaderLoop()
         {
+            lock (Program.NeighborLock)
+            {
+            }
             while (true)
             {
-                var msg = Read.ReadLine();
+                string msg;
+                try
+                {
+                    msg = Read.ReadLine();
+                }
+                catch (IOException)
+                {
+                    //TODO: exception disconnect
+                    return;
+                }
                 Console.WriteLine("// " + msg);
                 var split = msg.Split(' ');
                 var action = split[0];
 
-                if (action == "mydist" || action == "connect")
+                if (action == "mydist")
                 {
                     var sender = int.Parse(split[1]);
                     var recipient = int.Parse(split[2]);
@@ -101,19 +113,6 @@ namespace NetChange
                                 Program.Nbu[recipient] = -1;
                             }
                             RoutingTable.Recompute(recipient);
-
-                            if (action == "connect")
-                            {
-                                var subNetwork = Program.Neighbors.Keys.ToList();
-                                subNetwork.Add(Program.MijnPoort);
-
-                                foreach (var port in subNetwork)
-                                {
-                                    Program.Ndisu[Program.MijnPoort, port] = Program.N;
-                                    var message = string.Format("mydist {0} {1} {2}", Program.MijnPoort, port, Program.Du[port]);
-                                    Program.SendMessage(sender, message);
-                                }
-                            }
                         }
                     }
                 }
@@ -133,6 +132,7 @@ namespace NetChange
                 }
             }
         }
+
         public StreamReader Read;
         public StreamWriter Write;
 
@@ -209,7 +209,17 @@ namespace NetChange
                 // Zet de nieuwe verbinding in de verbindingslijst
                 var connection = new Connection(clientIn, clientOut);
                 lock (Program.NeighborLock)
+                {
                     Program.Neighbors.Add(port, connection);
+                    foreach (var nb in Program.Du)
+                        Program.SendMessage(port, "mydist {0} {1} {2}", Program.MijnPoort, nb.Key, nb.Value);
+                    foreach (var n in Program.Neighbors.Keys)
+                    {
+                        if (n == port)
+                            continue;
+                        Program.SendMessage(n, string.Format("mydist {0} {1} {2}", Program.MijnPoort, port, 1));
+                    }
+                }
             }
         }
     }
@@ -272,27 +282,12 @@ namespace NetChange
         public static NDIS Ndisu = new NDIS();
         public const int N = 20;
 
-        private static void Initialize()
-        {
-            var u = MijnPoort;
-            foreach (var w in Neighbors.Keys)
-            {
-                Du[w] = N;
-                Nbu[w] = -1; // undefined
-            }
-            Du[u] = 0;
-            Nbu[u] = u; // local
-            foreach (var w in Neighbors.Keys)
-            {
-                var message = string.Format("mydist {0} {0} 0", MijnPoort);
-                SendMessage(w, message);
-            }
-        }
         private static void InitializePort(int port)
         {
-            var message = string.Format("connect {0} {0} 0", MijnPoort);
-            SendMessage(port, message);
+            foreach (var nb in Du)
+                SendMessage(port, "mydist {0} {1} {2}", MijnPoort, nb.Key, nb.Value);
         }
+
         private static void RemovePort(int port)
         {
             var message = string.Format("disconnect {0} {1} 0", MijnPoort, port);
@@ -306,8 +301,9 @@ namespace NetChange
                     Console.WriteLine(i);
         }
 
-        public static void SendMessage(int port, string message)
+        public static void SendMessage(int port, string message, params object[] args)
         {
+            message = string.Format(message, args);
             Console.WriteLine("// SendMessage({0}, \"{1}\")", port, message);
             lock (NeighborLock)
                 Neighbors[port].Write.WriteLine(message);
@@ -335,9 +331,9 @@ namespace NetChange
         public static void Connect(int port)
         {
             Console.WriteLine("// Connect({0})", port);
-            var connection = Connection.SafeConnect(port);
             lock (NeighborLock)
             {
+                var connection = Connection.SafeConnect(port);
                 Neighbors.Add(port, connection);
                 InitializePort(port);
             }
@@ -355,31 +351,20 @@ namespace NetChange
             Console.Title = "NetChange " + MijnPoort.ToString();
             new Server(MijnPoort);
 
-            lock (GlobalLock)
-            {
-                // Connect to the neighbors
-                for (var i = 0; i < args.Length - 1; i++)
-                {
-                    var port = int.Parse(args[i + 1]);
-                    if (port > MijnPoort)
-                    {
-                        lock (NeighborLock)
-                            Neighbors.Add(port, Connection.SafeConnect(port));
-                    }
-                }
+            Du[MijnPoort] = 0;
+            Nbu[MijnPoort] = MijnPoort; // local
 
-                //TODO: beter geen busywait
-                while (true)
+            for (var i = 0; i < args.Length - 1; i++)
+            {
+                var port = int.Parse(args[i + 1]);
+                if (port < MijnPoort)
                 {
                     lock (NeighborLock)
-                        if (Neighbors.Count == args.Length - 1)
-                            break;
-                    Console.WriteLine("//Busywait");
-                    Thread.Sleep(300);
+                    {
+                        Neighbors.Add(port, Connection.SafeConnect(port));
+                        InitializePort(port);
+                    }
                 }
-
-                lock (NeighborLock)
-                    Initialize();
             }
 
             // Read user input
