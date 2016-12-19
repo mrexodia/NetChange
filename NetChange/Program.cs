@@ -50,7 +50,6 @@ namespace NetChange
                 {
                     Program.Du[v] = d;
                     Program.Nbu[v] = w;
-                    Console.WriteLine("Onbereikbaar: {0}", v);
                 }
                 else
                 {
@@ -70,6 +69,9 @@ namespace NetChange
             else
             {
                 Console.WriteLine("// NO CHANGE {0}", v);
+
+                if (Program.Du[v] == Program.N)
+                    Console.WriteLine("Onbereikbaar: {0}", v);
             }
         }
     }
@@ -128,6 +130,12 @@ namespace NetChange
                         Console.WriteLine(message);
                     else
                         Program.ForwardMessage(recipient, message);
+                }
+                else if (action == "disconnect")
+                {
+                    var port = int.Parse(split[1]);
+                    foreach (var nb in Program.Du.Keys.ToList())
+                        Program.SendMessage(port, "mydist {0} {1} {2}", Program.MijnPoort, nb, 20);
                 }
                 else
                 {
@@ -293,14 +301,16 @@ namespace NetChange
 
         private static void RemovePort(int port)
         {
-            var message = string.Format("disconnect {0} {1} 0", MijnPoort, port);
-            SendMessage(port, message);
+            foreach (var nb in Du)
+                SendMessage(port, "mydist {0} {1} {2}", MijnPoort, nb.Key, 20);
+
+            SendMessage(port, "disconnect {0}", MijnPoort);
         }
 
         public static void PrintRoutingTable()
         {
             lock (GlobalLock)
-                foreach (var i in Nbu.Select(v => string.Format("{0} {1} {2}", v.Key, Du[v.Key], v.Value == MijnPoort ? "local" : v.Value.ToString())).OrderBy(s => int.Parse(s.Split(' ')[0])))
+                foreach (var i in Nbu.Where(x => x.Value != -1).Select(v => string.Format("{0} {1} {2}", v.Key, Du[v.Key], v.Value == MijnPoort ? "local" : v.Value.ToString())).OrderBy(s => int.Parse(s.Split(' ')[0])))
                     Console.WriteLine(i);
         }
 
@@ -318,7 +328,7 @@ namespace NetChange
             lock (NeighborLock)
             {
                 int dest;
-                if (Nbu.TryGetValue(port, out dest))
+                if (Nbu.TryGetValue(port, out dest) && Nbu[port] != -1)
                 {
                     Console.WriteLine("Bericht voor {0} doorgestuurd naar {1}", port, dest);
                     if (!Neighbors.ContainsKey(port))
@@ -348,7 +358,13 @@ namespace NetChange
             Console.WriteLine("// Disconnect({0})", port);
 
             if (Neighbors.ContainsKey(port))
+            {
+                lock (GlobalLock)
+                {
+                    RemovePort(port);
+                }
                 Console.WriteLine("Verbroken: {0}", port);
+            }
             else
                 Console.WriteLine("Poort {0} is niet bekend", port);
         }
