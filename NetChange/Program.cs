@@ -72,7 +72,10 @@ namespace NetChange
             if (Program.Du[v] != prev)
             {
                 Log.WriteLine("// CHANGE {0} -> {1}", v, Program.Du[v]);
-                Log.WriteLine("Afstand naar {0} is nu {1} via {2}", v, Program.Du[v], Program.Nbu[v]);
+                if (Program.Nbu[v] != -1)
+                {
+                    Log.WriteLine("Afstand naar {0} is nu {1} via {2}", v, Program.Du[v], Program.Nbu[v]);
+                }
                 foreach (var x in Program.Neighbors.Keys)
                 {
                     Program.SendMessage(x, string.Format("mydist {0} {1} {2}", u, v, Program.Du[v]));
