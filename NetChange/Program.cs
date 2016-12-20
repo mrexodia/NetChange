@@ -43,8 +43,9 @@ namespace NetChange
         {
             Log.WriteLine("// Recompute " + v);
             int u = Program.MijnPoort;
-            int prev = Program.Du[v];
-            Log.WriteLine("// Previous = " + prev);
+            int prevDistance = Program.Du[v];
+            int prevNeighbor = Program.Nbu[v];
+            Log.WriteLine("// Previous = " + prevDistance);
             if (u == v)
             {
                 Program.Du[u] = 0;
@@ -69,7 +70,7 @@ namespace NetChange
                     Program.Nbu[v] = -1; //undefined
                 }
             }
-            if (Program.Du[v] != prev)
+            if (Program.Du[v] != prevDistance || Program.Nbu[v] != prevNeighbor)
             {
                 Log.WriteLine("// CHANGE {0} -> {1}", v, Program.Du[v]);
                 if (Program.Nbu[v] != -1)
