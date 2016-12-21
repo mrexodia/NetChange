@@ -3,54 +3,57 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 
-using NetChange;
-
-public class Server
+namespace NetChange
 {
-    public Server(int port)
+    public class Server
     {
-        // Luister op de opgegeven poort naar verbindingen
-        TcpListener server = new TcpListener(IPAddress.Any, port);
-        server.Start();
-
-        // Start een aparte thread op die verbindingen aanneemt
-        new Thread(() => AcceptLoop(server)).Start();
-    }
-
-    private static void AcceptLoop(TcpListener handle)
-    {
-        while (true)
+        public Server(int port)
         {
-            TcpClient client = handle.AcceptTcpClient();
-            StreamReader clientIn = new StreamReader(client.GetStream());
-            StreamWriter clientOut = new StreamWriter(client.GetStream())
+            // Listen for new connections.
+            var server = new TcpListener(IPAddress.Any, port);
+            server.Start();
+
+            // Start a separate thread that takes new connections.
+            new Thread(() => AcceptLoop(server)).Start();
+        }
+
+        private static void AcceptLoop(TcpListener handle)
+        {
+            while (true)
             {
-                AutoFlush = true
-            };
-
-            // De server weet niet wat de poort is van de client die verbinding maakt, de client geeft dus als onderdeel van het protocol als eerst een bericht met zijn poort
-            int port = int.Parse(clientIn.ReadLine());
-
-            Log.WriteLine("// Client maakt verbinding: " + port);
-
-            // Zet de nieuwe verbinding in de verbindingslijst
-            lock (Program.NeighborLock)
-            {
-                var connection = new Connection(clientIn, clientOut);
-                Program.Neighbors.Add(port, connection);
-                var network = Program.Du;
-                var neighbors = Program.Neighbors;
-
-                foreach (var node in network)
+                var client = handle.AcceptTcpClient();
+                var clientIn = new StreamReader(client.GetStream());
+                var clientOut = new StreamWriter(client.GetStream())
                 {
-                    Program.SendMessage(port, Program.MydistFormat, Program.MijnPoort, node.Key, node.Value);
-                }
+                    AutoFlush = true
+                };
 
-                foreach (var neighbor in neighbors.Keys)
+                // The server doesn't know the port of the client and the client will send this as part of the protocol.
+                var port = int.Parse(clientIn.ReadLine());
+
+                Log.WriteLine("// Client maakt verbinding: " + port);
+
+                // Put the new connection in our neighbors.
+                lock (Program.NeighborLock)
                 {
-                    if (neighbor == port)
-                        continue;
-                    Program.SendMessage(neighbor, Program.MydistFormat, Program.MijnPoort, port, 1);
+                    var connection = new Connection(clientIn, clientOut);
+                    Program.Neighbors.Add(port, connection);
+                    var network = Program.Du;
+                    var neighbors = Program.Neighbors;
+
+                    // Send the new client our (full) routing table.
+                    foreach (var node in network)
+                    {
+                        Program.SendMessage(port, Program.MydistFormat, Program.MijnPoort, node.Key, node.Value);
+                    }
+
+                    // Notify our (old) direct neighbors that a new neighbor lives next door.
+                    foreach (var neighbor in neighbors.Keys)
+                    {
+                        if (neighbor == port)
+                            continue;
+                        Program.SendMessage(neighbor, Program.MydistFormat, Program.MijnPoort, port, 1);
+                    }
                 }
             }
         }

@@ -2,121 +2,120 @@
 using System.Net.Sockets;
 using System.Threading;
 
-using NetChange;
-
-public class Connection
+namespace NetChange
 {
-    public StreamReader Read;
-    public StreamWriter Write;
-
-    // Connection heeft 2 constructoren: deze constructor wordt gebruikt als wij CLIENT worden bij een andere SERVER
-    public Connection(int port)
+    public class Connection
     {
-        TcpClient client = new TcpClient(Program.Localhost, port);
-        Read = new StreamReader(client.GetStream());
-        Write = new StreamWriter(client.GetStream())
+        public StreamReader Read;
+        public StreamWriter Write;
+
+        // Connection has 2 constructors: this constructor is used if we become client to another server.
+        public Connection(int port)
         {
-            AutoFlush = true
-        };
-
-        // De server kan niet zien van welke poort wij client zijn, dit moeten we apart laten weten
-        Write.WriteLine(Program.MijnPoort);
-
-        // Start het reader-loopje
-        new Thread(ReaderLoop).Start();
-    }
-
-    // Deze constructor wordt gebruikt als wij SERVER zijn en een CLIENT maakt met ons verbinding
-    public Connection(StreamReader read, StreamWriter write)
-    {
-        Read = read;
-        Write = write;
-
-        // Start het reader-loopje
-        new Thread(ReaderLoop).Start();
-    }
-
-    public static Connection SafeConnect(int port)
-    {
-        while (true)
-        {
-            try
+            var client = new TcpClient("localhost", port);
+            Read = new StreamReader(client.GetStream());
+            Write = new StreamWriter(client.GetStream())
             {
-                return new Connection(port);
-            }
-            catch (SocketException) { } // Kon niet verbinden
-            Log.WriteLine("// SafeConnect({0}) failed, retrying...", port);
-            Thread.Sleep(100);
-        }
-    }
+                AutoFlush = true
+            };
 
-    // Deze loop leest wat er binnenkomt en print dit
-    private void ReaderLoop()
-    {
-        lock (Program.NeighborLock)
-        {
+            // The server cannot see which port we are client of, we have to report this as part of the protocol.
+            Write.WriteLine(Program.MijnPoort);
+
+            // Start the reader loop.
+            new Thread(ReaderLoop).Start();
         }
 
-        while (true)
+        // This constructor is used if we are server and a client connects to us.
+        public Connection(StreamReader read, StreamWriter write)
         {
-            string msg;
-            try
-            {
-                msg = Read.ReadLine();
-            }
-            catch (IOException)
-            {
-                //TODO: exception disconnect
-                return;
-            }
-            Log.WriteLine("// " + msg);
-            var split = msg.Split(' ');
-            var action = split[0];
+            Read = read;
+            Write = write;
 
-            if (action == Program.ActionMydist)
-            {
-                var sender = int.Parse(split[1]);
-                var recipient = int.Parse(split[2]);
-                var d = int.Parse(split[3]);
+            // Start the reader loop.
+            new Thread(ReaderLoop).Start();
+        }
 
-                lock (Program.GlobalLock)
+        public static Connection SafeConnect(int port)
+        {
+            while (true)
+            {
+                try
                 {
-                    Program.Ndisu[sender, recipient] = d;
-                    lock (Program.NeighborLock)
+                    return new Connection(port);
+                }
+                catch (SocketException) { } // Failed to connect
+                Log.WriteLine("// SafeConnect({0}) failed, retrying...", port);
+                Thread.Sleep(100);
+            }
+        }
+
+        // This loop reads messages and takes appropriate action.
+        private void ReaderLoop()
+        {
+            // Make sure the message loop only starts after the connection is added to the neighbors
+            lock (Program.NeighborLock)
+            {
+            }
+
+            while (true)
+            {
+                var msg = Read.ReadLine();
+                Log.WriteLine("// " + msg);
+                var split = msg.Split(' ');
+                var action = split[0];
+
+                switch (action)
+                {
+                    case Program.ActionMydist:
                     {
-                        if (!Program.Du.ContainsKey(recipient))
-                        {
-                            Program.Du[recipient] = Program.N;
-                            Program.Nbu[recipient] = -1;
-                        }
-                        RoutingTable.Recompute(recipient);
-                    }
-                }
-            }
-            else if (action == Program.ActionForward)
-            {
-                int recipient = int.Parse(split[1]);
-                var message = msg.Substring(msg.IndexOf(split[1]) + split[1].Length + 1);
+                        var sender = int.Parse(split[1]);
+                        var recipient = int.Parse(split[2]);
+                        var d = int.Parse(split[3]);
 
-                if (recipient == Program.MijnPoort)
-                    Log.WriteLine(message);
-                else
-                    Program.ForwardMessage(recipient, message);
-            }
-            else if (action == Program.ActionDisconnect)
-            {
-                var port = int.Parse(split[1]);
-                lock (Program.GlobalLock)
-                {
-                    foreach (var nb in Program.Du)
-                        Program.SendMessage(port, Program.MydistFormat, Program.MijnPoort, nb.Key, 20);
-                    lock (Program.NeighborLock)
-                        Program.Neighbors.Remove(port);
+                        lock (Program.GlobalLock)
+                        {
+                            Program.Ndisu[sender, recipient] = d;
+                            lock (Program.NeighborLock)
+                            {
+                                if (!Program.Du.ContainsKey(recipient))
+                                {
+                                    Program.Du[recipient] = Program.N;
+                                    Program.Nbu[recipient] = -1;
+                                }
+                                RoutingTable.Recompute(recipient);
+                            }
+                        }
+                    }
+                    break;
+
+                    case Program.ActionForward:
+                    {
+                        var recipient = int.Parse(split[1]);
+                        var message = msg.Substring(msg.IndexOf(split[1]) + split[1].Length + 1);
+                        Program.ForwardMessage(recipient, message);
+                    }
+                    break;
+
+                    case Program.ActionDisconnect:
+                    {
+                        var port = int.Parse(split[1]);
+                        lock (Program.GlobalLock)
+                        {
+                            foreach (var nb in Program.Du)
+                                Program.SendMessage(port, Program.MydistFormat, Program.MijnPoort, nb.Key, 20);
+                            lock (Program.NeighborLock)
+                                Program.Neighbors.Remove(port);
+                        }
+                    }
+                    break;
+
+                    default:
+                    {
+                        Log.WriteLine(msg);
+                    }
+                    break;
                 }
-            }
-            else
-            {
-                Log.WriteLine(msg);
             }
         }
     }
