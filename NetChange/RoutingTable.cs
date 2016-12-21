@@ -56,7 +56,7 @@ public static class RoutingTable
         if (Program.Du[v] != prevDistance || Program.Nbu[v] != prevNeighbor)
         {
             Log.WriteLine("// CHANGE {0} -> {1}", v, Program.Du[v]);
-            if (Program.Nbu[v] != -1)
+            if (Program.Nbu[v] != -1 && Program.Du[v] < prevDistance)
             {
                 Log.WriteLine(Program.OutputDistance, v, Program.Du[v], Program.Nbu[v]);
             }
