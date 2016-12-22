@@ -26,7 +26,7 @@ namespace NetChange
         public static void Recompute(int v)
         {
             //Implemented from: http://www.cs.uu.nl/docs/vakken/b3cc/Prak/NetchangeBoek.pdf
-            
+
             Log.WriteLine("// Recompute " + v);
             var u = Program.MijnPoort;
             var prevDistance = Program.Du[v];
