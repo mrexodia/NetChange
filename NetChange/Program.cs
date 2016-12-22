@@ -120,13 +120,10 @@ namespace NetChange
         {
             Neighbors.Remove(port);
 
-            // Save the ports of the current routing table to prevent changes while recomputing
-            var duk = Du.Keys.ToArray();
-
-            // Recompute every port in our routing table
-            foreach (var d in duk)
+            // Recompute every node that has port as preferred neighbor
+            foreach (var v in Nbu.Where(n => n.Value == port).ToArray())
             {
-                RoutingTable.Recompute(d);
+                RoutingTable.Recompute(v.Key);
             }
         }
 
