@@ -7,7 +7,8 @@ namespace NetChange
     {
         private static Tuple<int, int> MinimumNeighbor(int v)
         {
-            var minimum = int.MaxValue;
+            // If no minimum neighbor can be found, we return N for unreachable
+            var minimum = Program.N;
             var prefNeighbor = -1;
 
             foreach (var w in Program.Neighbors.Keys)
