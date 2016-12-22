@@ -102,10 +102,10 @@ namespace NetChange
                         var port = int.Parse(split[1]);
                         lock (Program.GlobalLock)
                         {
-                            foreach (var nb in Program.Du)
-                                Program.SendMessage(port, Program.MydistFormat, Program.MijnPoort, nb.Key, 20);
                             lock (Program.NeighborLock)
-                                Program.Neighbors.Remove(port);
+                            {
+                                Program.RemovePort(port);
+                            }
                         }
                     }
                     break;

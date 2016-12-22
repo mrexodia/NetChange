@@ -116,14 +116,16 @@ namespace NetChange
             }
         }
 
-        private static void RemovePort(int port)
+        public static void RemovePort(int port)
         {
-            //TODO wtf doet dit? waarom naar port want die gaat er toch vandoor
-            foreach (var node in Du)
+            Neighbors.Remove(port);
+
+            var duk = Du.Keys.ToArray();
+            foreach (var d in duk)
             {
-                SendMessage(port, MydistFormat, MijnPoort, node.Key, 20);
+                Ndisu[port, d] = 20;
+                RoutingTable.Recompute(d);
             }
-            SendMessage(port, DisconnectFormat, MijnPoort);
         }
 
         public static void PrintRoutingTable()
@@ -196,8 +198,9 @@ namespace NetChange
                 {
                     if (Neighbors.ContainsKey(port))
                     {
+                        SendMessage(port, DisconnectFormat, MijnPoort);
                         RemovePort(port);
-                        Neighbors.Remove(port);
+
                         Log.WriteLine("Verbroken: {0}", port);
                     }
                     else

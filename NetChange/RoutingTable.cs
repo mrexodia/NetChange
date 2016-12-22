@@ -31,7 +31,7 @@ namespace NetChange
             var u = Program.MijnPoort;
             var prevDistance = Program.Du[v];
             var prevNeighbor = Program.Nbu[v];
-            var smartN = Program.Du.Count(gt => gt.Value != -1);
+            var smartN = Program.Du.Count(x => x.Value != -1);
 
             Log.WriteLine("// Previous = " + prevDistance);
             if (u == v)
